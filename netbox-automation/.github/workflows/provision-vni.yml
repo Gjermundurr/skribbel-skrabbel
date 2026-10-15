@@ -1,0 +1,87 @@
+name: Provision VXLAN VNI
+on:
+  workflow_dispatch:
+    inputs:
+      vlan_id:
+        description: "NetBox VLAN object ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Validate and Plan
+    runs-on: ubuntu-onprem
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          ansible-galaxy collection install \
+            -r collections/requirements.yml
+
+      - name: Fetch NetBox credentials from Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://vault.hashcorp.local:8200
+          method: jwt
+          role: github-netbox-provision-vni
+          secrets: |
+            secret/data/automation/netbox/ url | NETBOX_URL ;
+            secret/data/automation/netbox/provision-vni token | NETBOX_TOKEN ;
+
+      - name: Fetch config from NetBox
+        env:
+          VLAN_ID: ${{ inputs.vlan_id }}
+        run: |
+          python scripts/build_intent.py \
+            --vlan-id "$VLAN_ID" \
+            --output plan.json \
+            --inventory inventory.yml
+
+      - name: Validate NetBox data
+        run: |
+          python scripts/validate_intent.py plan.json
+
+  deploy:
+    name: Deploy to Leaf Switches
+    needs: plan
+    runs-on: ubuntu-onprem
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          ansible-galaxy collection install \
+            -r collections/requirements.yml
+
+      - name: Fetch Switches credentials from Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://vault.hashcorp.local:8200
+          method: jwt
+          role: github-provision-vni
+          secrets: |
+            secret/data/automation/cisco-nx nxos_username | NXOS_USERNAME ;
+            secret/data/automation/cisco-nx/provision-vni nxos_password | NXOS_PASSWORD ;
+
+      - name: Deploy VXLAN configuration
+        env:
+          NXOS_USERNAME: ${{ env.NXOS_USERNAME }}
+          NXOS_PASSWORD: ${{ env.NXOS_PASSWORD }}
+        run: |
+          ansible-playbook \
+            -i inventory.yml \
+            playbooks/provision-l2vni.yml \
+            -e @plan.json
+
+      - name: 

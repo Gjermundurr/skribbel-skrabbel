@@ -1,0 +1,8 @@
+---
+collections:
+  - name: netbox.netbox
+    version: "3.23.0"
+  - name: cisco.nxos
+    version: "11.2.0"
+  - name: ansible.netcommon
+    version: "8.5.3"

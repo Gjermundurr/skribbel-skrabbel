@@ -1,0 +1,37 @@
+name: NetBox data source sync
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'custom-scripts/**'
+      - 'config-contexts/**'
+      - 'config-templates/**'
+
+jobs:
+  sync:
+    name: Refresh NetBox Data Source
+    runs-on: ubuntu-onprem
+
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Fetch NetBox credentials from Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://vault.hashcorp.local:8200
+          method: jwt
+          role: github-netbox-sync
+          secrets: |
+            secret/data/automation/netbox/ url | NETBOX_URL ;
+            secret/data/automation/netbox/datasource-sync token | NETBOX_TOKEN ;
+            secret/data/netbox/automation/datasource-id datasource_id | DATASOURCE_ID
+
+      - name: Trigger NetBox Data Source Sync
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Token ${NETBOX_TOKEN}" \
+            --header "Accept: application/json" \
+            "${NETBOX_URL}/api/core/data-sources/${DATASOURCE_ID}/sync/"

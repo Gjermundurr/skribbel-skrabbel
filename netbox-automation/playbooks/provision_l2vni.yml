@@ -1,0 +1,38 @@
+
+---
+- name: Provision L2 VNI on Nexus leafs
+  hosts: vxlan_leafs
+  gather_facts: false
+  serial: 1
+
+  vars:
+    ansible_connection: ansible.netcommon.network_cli
+    ansible_network_os: cisco.nxos.nxos
+    ansible_user: "{{ lookup('env', 'NXOS_USERNAME') }}"
+    ansible_password: "{{ lookup('env', 'NXOS_PASSWORD') }}"
+
+  tasks:
+    - name: Configure VLAN and VNI mapping
+      cisco.nxos.nxos_vlans:
+        config:
+          - vlan_id: "{{ vlan_id | int }}"
+            name: "{{ vlan_name }}"
+            mapped_vni: "{{ vni | int }}"
+        state: merged
+
+    - name: Configure EVPN L2 VNI
+      cisco.nxos.nxos_evpn_vni:
+        vni: "{{ vni | string }}"
+        route_distinguisher: auto
+        route_target_import:
+          - "{{ evpn_route_target }}"
+        route_target_export:
+          - "{{ evpn_route_target }}"
+        state: present
+
+    - name: Add VNI to existing NVE interface
+      cisco.nxos.nxos_vxlan_vtep_vni:
+        interface: nve1
+        vni: "{{ vni | string }}"
+        ingress_replication: bgp
+        state: present

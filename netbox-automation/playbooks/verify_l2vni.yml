@@ -1,0 +1,65 @@
+
+---
+- name: Verify deployed L2 VNI
+  hosts: vxlan_leafs
+  gather_facts: false
+
+  vars:
+    ansible_connection: ansible.netcommon.network_cli
+    ansible_network_os: cisco.nxos.nxos
+    ansible_user: "{{ lookup('env', 'NXOS_USERNAME') }}"
+    ansible_password: "{{ lookup('env', 'NXOS_PASSWORD') }}"
+
+  tasks:
+    - name: Gather VLAN configuration
+      cisco.nxos.nxos_vlans:
+        state: gathered
+      register: vlan_state
+
+    - name: Locate requested VLAN
+      ansible.builtin.set_fact:
+        matching_vlans: >-
+          {{
+            vlan_state.gathered
+            | selectattr('vlan_id', 'equalto', vlan_id | int)
+            | list
+          }}
+
+    - name: Verify VLAN exists
+      ansible.builtin.assert:
+        that:
+          - matching_vlans | length == 1
+        fail_msg: "VLAN missing on {{ inventory_hostname }}"
+
+    - name: Verify VLAN-to-VNI mapping
+      ansible.builtin.assert:
+        that:
+          - >-
+            (matching_vlans[0].mapped_vni | default(-1) | int)
+            == (vni | int)
+        fail_msg: "Incorrect VNI mapping on {{ inventory_hostname }}"
+
+    - name: Gather NVE and EVPN state
+      cisco.nxos.nxos_command:
+        commands:
+          - show running-config interface nve1
+          - show running-config evpn
+          - show nve vni
+          - show bgp l2vpn evpn summary
+      register: overlay_state
+
+    - name: Verify NVE membership
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('member vni ' ~ (vni | string))
+            in overlay_state.stdout[0]
+        fail_msg: "VNI missing from nve1"
+
+    - name: Verify EVPN L2 VNI configured
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('vni ' ~ (vni | string) ~ ' l2')
+            in overlay_state.stdout[1]
+        fail_msg: "EVPN L2 VNI configuration missing"

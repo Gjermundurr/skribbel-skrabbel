@@ -1,0 +1,5 @@
+# deploy new vxlan interface
+- name: Deploy vxlan interface to leaf switch
+  hosts: '{{ hostname }}'
+  tasks:
+    -

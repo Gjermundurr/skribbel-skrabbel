@@ -1,0 +1,16 @@
+plugin: netbox.netbox.nb_inventory
+api_endpoint: http://netbox.local:8000
+config_context: false
+group_by:
+  - site
+  - location
+  - tenant
+  - role
+  - status
+  - manufacturer
+  - device_type
+device_query_filters:
+  - has_primary_ip: 'true'
+token:
+  type: Token
+  value: '{{ lookup("ansible.builtin.env", "NETBOX_TOKEN") }}'

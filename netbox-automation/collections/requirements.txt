@@ -1,0 +1,6 @@
+# Ansible
+ansible-core=2.19
+ansible-pylibssh>=1.4.0
+pynetbox=7.5
+PyYAML=6
+requests>=2.32
